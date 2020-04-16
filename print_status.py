@@ -105,6 +105,16 @@ def print_status(status, status_args):
 
 
 def enable_printing(func):
+    """
+    A function decorator wrapping it in the curses.wrapper function allowing
+    advanced console printing without totally breaking the host terminal.
+    
+    Arguments:
+        func {function} -- Function to be wrapped
+    
+    Returns:
+        function -- The decorated function
+    """    
     def intermediate(screen, func, args, kwargs):
         print_status.screen = screen
         curses.use_default_colors()

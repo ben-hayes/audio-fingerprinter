@@ -2,6 +2,10 @@
 data
 *.fingerprint
 settings.json
+*.db
+*.txt
+param_search*/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
