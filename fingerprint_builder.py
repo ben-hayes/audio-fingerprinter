@@ -1,16 +1,87 @@
+import curses
 import os
 import pickle
+import time
 
 import librosa
 import numpy as np
-import matplotlib.pyplot as plt
 
-def pick_peaks(spectrogram, tau=16, kappa=32, hop_tau=4, hop_kappa=64):
+# store status printouts in a handy dict to save them clogging up main function
+statuses = {
+    "fingerprint_created": {
+        "text": """
+====================================================================
+Fingerprint created for:    {file_name}
+Number of hashes:           {num_hashes}
+Number of new hashes:       {num_new_hashes}
+Total hashes:               {total_hashes}
+Time to create fingerprint: {time_to_create} seconds
+Time elapsed so far:        {total_time} seconds
+--------------------------------------------------------------------
+Now analysing:              
+====================================================================
+            """,
+        "y": 0,
+        "x": 0
+    },
+    "analysing_fingerprint": {
+        "text": "Now analysing:              {now_analysing}",
+        "y": 9,
+        "x": 0
+    },
+    "writing_db": {
+        "text": "Writing fingerprint database {db_file} to disk...",
+        "y": 9,
+        "x": 0
+    }
+}
+
+def print_status(screen, status, status_args):
+    """
+    Helper function for printing the status to the screen.
+    
+    Arguments:
+        screen {curses.window} -- Reference to a curses window object
+        status {str} -- Key in statuses dictionary of desired status
+        status_args {dict} -- Dict of keyword arguments to format the status
+                              string.
+    """    
+    # using curses in lieu of print to allow for multiline overwrites
+    screen.addstr(
+        statuses[status]["y"],
+        statuses[status]["x"],
+        statuses[status]["text"].format(**status_args)
+    )
+    screen.refresh()
+
+
+def pick_peaks(spectrogram, tau=21, kappa=59, hop_tau=11, hop_kappa=74):
+    """
+    Given a spectrogram, finds peaks within window specified by parameters.
+    Window shape will be (2 * kappa + 1, 2 * tau + 1)
+
+    Default parameters selected by random search.
+    
+    Arguments:
+        spectrogram {NumPy Array} -- Time-frequency magnitude representation of
+                                     signal
+    
+    Keyword Arguments:
+        tau {int} --  Window size in time direction (default: {21})
+        kappa {int} -- Window size in frequency direction (default: {59})
+        hop_tau {int} -- Hop size in time direction (default: {11})
+        hop_kappa {int} -- Hop size in frequency direction (default: {74})
+    
+    Returns:
+        NumPy Array -- A sparse NumPy array of same shape as the input. Peaks
+                       will be signified by ones and non-peaks by zeros.
+    """    
     # create empty array to store peaks
     peaks = np.zeros_like(spectrogram)
 
     # calculate how many hops we will make along each axis
-    n_freq_steps = int(np.floor((spectrogram.shape[0] - 2 * kappa) / hop_kappa))
+    n_freq_steps =\
+        int(np.floor((spectrogram.shape[0] - 2 * kappa) / hop_kappa))
     n_time_steps = int(np.floor((spectrogram.shape[1] - 2 * tau) / hop_tau))
 
     for n in range(n_time_steps):
@@ -30,65 +101,247 @@ def pick_peaks(spectrogram, tau=16, kappa=32, hop_tau=4, hop_kappa=64):
     
     return peaks
 
-def quantise_frequency(peaks, factor=32):
-    # create an empty array to store the output
-    n_bins = int(np.ceil(peaks.shape[0] / factor))
-    quantised_peaks = np.zeros((n_bins, peaks.shape[1]))
 
-    for k in range(n_bins):
-        # extract the group of frequencies we will be merging
-        freq_lower = k * factor
-        freq_upper = (k + 1) * factor
-        freq_group = peaks[freq_lower:freq_upper, :]
-
-        # sum across the axis and keep only on/off values
-        new_row = np.sum(freq_group, axis=0)
-        new_row[new_row > 0] = 1
-
-        # store row in output array
-        quantised_peaks[k, :] = new_row
+def find_peak_pairs(
+        peaks,
+        target_time_offset=3,
+        target_time_width=196,
+        target_freq_height=220):
+    """
+    Given a sparse array of spectral peaks, find all peak pairs according to
+    a given set of window parameters.
     
-    return quantised_peaks
+    Arguments:
+        peaks {NumPy Array} -- Sparse array of spectral peaks
+    
+    Keyword Arguments:
+        target_time_offset {int} -- Offset of window from peak (default: {3})
+        target_time_width {int} -- Width of window in time (default: {196})
+        target_freq_height {int} -- Height of window in frequency
+                                    (default: {220})
+    """        
+
+    # create an array of shape (N, 2) of the co-ordinates of all N peaks in
+    # our sparse peak array
+    points = np.dstack(np.nonzero(peaks)).squeeze()
+
+    for point in points:
+        # define the bounds of our target zone
+        freq_lo = max(point[0] - target_freq_height, 0)
+        freq_hi = min(point[0] + target_freq_height, peaks.shape[0])
+        time_lo = point[1] + target_time_offset
+        time_hi = time_lo + target_time_width
+
+        # if we've passed the end of the array then skip this iteration
+        if time_lo > peaks.shape[1]:
+            continue
+
+        # pull our target zone out of the sparse peak array
+        target_zone = peaks[freq_lo:freq_hi, time_lo:time_hi]
+
+        # again create another array of point co-ordinates, this time just in
+        # our target zone
+        target_points = np.dstack(np.nonzero(target_zone)).reshape(-1, 2)
+        for target_point in target_points:
+            # create our hashable tuple: (k_1, k_2, n_2 - n_1)
+            peak_pair = (
+                point[0],
+                freq_lo + target_point[0],
+                (time_lo + target_point[1]) - point[1])
+            
+            # using yield rather than return, we can call this function as a
+            # generator which means we can write a pretty dict comprehension
+            # and take advantage of some of python's (modest) optimisations:
+            yield {
+                "peak_pair": peak_pair,
+                "offset": point[1]
+            }
+
+def create_pairwise_hashes(
+        peaks,
+        target_time_offset=3,
+        target_time_width=196,
+        target_freq_height=220):
+    """
+    Given a sparse array of spectral peaks, create a list of peak pair hashes
+    and their corresponding time offsets.
+    
+    Arguments:
+        peaks {NumPy Array} -- Sparse array of spectral peaks
+    
+    Keyword Arguments:
+        target_time_offset {int} -- Offset of window from peak (default: {3})
+        target_time_width {int} -- Width of window in time (default: {196})
+        target_freq_height {int} -- Height of window in frequency
+                                    (default: {220})
+    """        
+
+    # find all our peak pairs according to the criteria passed as arguments,
+    # and construct a list of them along with their offset times. Note that as
+    # we will be storing these in a Python dict (the fastest implementation of 
+    # a hash table available to us in Python) and tuples are immutable and
+    # therefore hashable, we don't need to explicitly calculate a hash value
+    # and can instead directly use them as keys
+    return [{
+            "hash": pair["peak_pair"],
+            "offset": int(pair["offset"])
+        } for pair in find_peak_pairs(
+            peaks,
+            target_time_offset,
+            target_time_width,
+            target_freq_height
+        )]
 
 
-def create_inverted_lists(peaks):
-    inverted_lists = []
-    for row in peaks:
-        inverted_list = np.nonzero(row)
-        inverted_lists.append(inverted_list[0])
-    return inverted_lists
-
-def create_fingerprint(path_to_audio):
+def create_fingerprint(path_to_audio, peak_picking_options={}):
+    """
+    Given an audio file, create a fingerprint (sparse array of spectral peaks)
+    
+    Arguments:
+        path_to_audio {str} -- Path on disk to audio file
+    
+    Keyword Arguments:
+        peak_picking_options {dict} -- Optional dict of keyword args to peak
+                                       picking alogrithm. Useful for performing
+                                       searches across parameter space for
+                                       optimal combinations. (default: {{}})
+    
+    Returns:
+        [type] -- [description]
+    """    
     # load audio
-    x, sr = librosa.load(path_to_audio)
+    x, _ = librosa.load(path_to_audio)
 
     # compute STFT
     X = np.abs(librosa.core.stft(x))
 
     # pick peaks
-    peaks = pick_peaks(X)
+    peaks = pick_peaks(X, **peak_picking_options)
 
-    # quantise peaks in frequency
-    quantised_peaks = quantise_frequency(peaks)
-
-    return quantised_peaks
+    return peaks
 
 
-def fingerprintBuilder(path_to_db, path_to_fingerprints):
+def fingerprint_builder(
+        screen,
+        path_to_db,
+        path_to_fingerprints,
+        peak_picking_options={},      
+        pair_searching_options={}):   
+    """
+    The main entry point for our fingerprint builder application.
+    
+    Arguments:
+        screen {curses.window} -- Reference to console window auto-created by
+                                  curses.wrapper call
+        path_to_db {str} -- Path to folder containing audio files
+        path_to_fingerprints {str} -- Path to desired output file
+    
+    Keyword Arguments:
+        peak_picking_options {dict} -- Optional dict of keyword args to peak
+                                       picking algorithm (default: {{}})
+        pair_searching_options {dict} -- Optional dict of keyword args to pair
+                                         searching algorithm (default: {{}})
+    """        
+
+    # setup curses library
+    curses.use_default_colors()
+    # initialise timer
+    start_time = time.perf_counter()
+
+    # initialise our fingerprints dict
+    fingerprints = {}
+
+    # last count of fingerprints is useful for tracking how many new hashes
+    # each file contributes
+    last_fingerprints_length = 0
+
     for entry in os.scandir(path_to_db):
+        # skip over non-wav files
         if os.path.splitext(entry.name)[1] != ".wav":
             continue
 
-        print("Creating fingerprint for %s..." % entry.name, end="\r")
-        fingerprint = create_fingerprint(entry.path)
-        # create inverted lists for each frequency bin
-        inverted_lists = create_inverted_lists(fingerprint)
+        print_status(
+            screen,
+            "analysing_fingerprint", {"now_analysing": entry.name}
+        )
 
-        print("Saving fingerprint for %s..." % entry.name, end="\r")
-        output_file_name = os.path.splitext(entry.name)[0] + ".fingerprint"
-        output_path = os.path.join(path_to_fingerprints, output_file_name)
+        # start timing hash creation
+        hash_start_time = time.perf_counter()
 
-        with open(output_path, "wb") as f:
-            pickle.dump(inverted_lists, f)
+        # pick out spectral peaks
+        fingerprint = create_fingerprint(entry.path, peak_picking_options)
+        # compute hashes
+        hashes = create_pairwise_hashes(fingerprint, **pair_searching_options)
 
-        print("%s done." % entry.name, end="\n")
+        for hash in hashes:
+            # if we haven't seen this hash before - computable in O(1)
+            if hash["hash"] not in fingerprints:
+                # create an empty list at this hash's address
+                fingerprints[hash["hash"]] = []
+
+            # append the appropriate file name and time offset under this hash
+            fingerprints[hash["hash"]].append({
+                "name": entry.name,
+                "offset": hash["offset"]
+            })
+
+        # find the current time to calculate performance
+        time_now = time.perf_counter()
+        print_status(
+            screen,
+            "fingerprint_created",
+            {
+                "file_name": entry.name,
+                "num_hashes": len(hashes),
+                "num_new_hashes":
+                    len(fingerprints) - last_fingerprints_length,
+                "total_hashes": fingerprints_length,
+                "time_to_create": "%.3f" % (time_now - hash_start_time),
+                "total_time": "%.3f" % (time_now - start_time)
+            })
+        last_fingerprints_length = len(fingerprints)
+
+    print_status(
+        screen,
+        "writing_db",
+        { "db_file": path_to_fingerprints }
+    )
+
+    # write the database to disk
+    with open(path_to_fingerprints, "wb") as f:
+        # using HIGHEST_PROTOCOL allows pickle to read/write faster and deal
+        # with bigger files
+        pickle.dump(fingerprints, f, pickle.HIGHEST_PROTOCOL)
+
+
+def fingerprintBuilder(
+        path_to_db,
+        path_to_fingerprints,
+        peak_picking_options={},
+        pair_searching_options={}):
+    """
+    Callable function for building fingerprints — wraps main function to allow
+    curses to print safely to terminal window.
+    
+    Arguments:
+        path_to_db {str} -- Path to folder containing audio files
+        path_to_fingerprints {str} -- Path to desired output file
+    
+    Keyword Arguments:
+        peak_picking_options {dict} -- Optional dict of keyword args to peak
+                                       picking algorithm (default: {{}})
+        pair_searching_options {dict} -- Optional dict of keyword args to pair
+                                         searching algorithm (default: {{}})
+    """        
+
+    # using the curses library to print relevant information to the terminal
+    # without making a mess. The wrapper function allows us to prevent
+    # the terminal layout from breaking if our application quits — it simply
+    # wraps the function in its first arg in a try...except... block which
+    # puts things back to normal if necessary
+    curses.wrapper(
+        fingerprint_builder,
+        path_to_db,
+        path_to_fingerprints,
+        peak_picking_options,
+        pair_searching_options)
