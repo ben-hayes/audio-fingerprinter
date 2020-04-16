@@ -6,53 +6,7 @@ import time
 import librosa
 import numpy as np
 
-# store status printouts in a handy dict to save them clogging up main function
-statuses = {
-    "fingerprint_created": {
-        "text": """
-====================================================================
-Fingerprint created for:    {file_name}
-Number of hashes:           {num_hashes}
-Number of new hashes:       {num_new_hashes}
-Total hashes:               {total_hashes}
-Time to create fingerprint: {time_to_create} seconds
-Time elapsed so far:        {total_time} seconds
---------------------------------------------------------------------
-Now analysing:              
-====================================================================
-            """,
-        "y": 0,
-        "x": 0
-    },
-    "analysing_fingerprint": {
-        "text": "Now analysing:              {now_analysing}",
-        "y": 9,
-        "x": 0
-    },
-    "writing_db": {
-        "text": "Writing fingerprint database {db_file} to disk...",
-        "y": 9,
-        "x": 0
-    }
-}
-
-def print_status(screen, status, status_args):
-    """
-    Helper function for printing the status to the screen.
-    
-    Arguments:
-        screen {curses.window} -- Reference to a curses window object
-        status {str} -- Key in statuses dictionary of desired status
-        status_args {dict} -- Dict of keyword arguments to format the status
-                              string.
-    """    
-    # using curses in lieu of print to allow for multiline overwrites
-    screen.addstr(
-        statuses[status]["y"],
-        statuses[status]["x"],
-        statuses[status]["text"].format(**status_args)
-    )
-    screen.refresh()
+from print_status import print_status, enable_printing
 
 
 def pick_peaks(spectrogram, tau=21, kappa=59, hop_tau=11, hop_kappa=74):
@@ -221,8 +175,8 @@ def create_fingerprint(path_to_audio, peak_picking_options={}):
     return peaks
 
 
-def fingerprint_builder(
-        screen,
+@enable_printing
+def fingerprintBuilder(
         path_to_db,
         path_to_fingerprints,
         peak_picking_options={},      
@@ -261,8 +215,7 @@ def fingerprint_builder(
             continue
 
         print_status(
-            screen,
-            "analysing_fingerprint", {"now_analysing": entry.name}
+            "fp_analysing_fingerprint", {"now_analysing": entry.name}
         )
 
         # start timing hash creation
@@ -288,22 +241,20 @@ def fingerprint_builder(
         # find the current time to calculate performance
         time_now = time.perf_counter()
         print_status(
-            screen,
-            "fingerprint_created",
+            "fp_fingerprint_created",
             {
                 "file_name": entry.name,
                 "num_hashes": len(hashes),
                 "num_new_hashes":
                     len(fingerprints) - last_fingerprints_length,
-                "total_hashes": fingerprints_length,
+                "total_hashes": len(fingerprints),
                 "time_to_create": "%.3f" % (time_now - hash_start_time),
                 "total_time": "%.3f" % (time_now - start_time)
             })
         last_fingerprints_length = len(fingerprints)
 
     print_status(
-        screen,
-        "writing_db",
+        "fp_writing_db",
         { "db_file": path_to_fingerprints }
     )
 
@@ -312,36 +263,3 @@ def fingerprint_builder(
         # using HIGHEST_PROTOCOL allows pickle to read/write faster and deal
         # with bigger files
         pickle.dump(fingerprints, f, pickle.HIGHEST_PROTOCOL)
-
-
-def fingerprintBuilder(
-        path_to_db,
-        path_to_fingerprints,
-        peak_picking_options={},
-        pair_searching_options={}):
-    """
-    Callable function for building fingerprints — wraps main function to allow
-    curses to print safely to terminal window.
-    
-    Arguments:
-        path_to_db {str} -- Path to folder containing audio files
-        path_to_fingerprints {str} -- Path to desired output file
-    
-    Keyword Arguments:
-        peak_picking_options {dict} -- Optional dict of keyword args to peak
-                                       picking algorithm (default: {{}})
-        pair_searching_options {dict} -- Optional dict of keyword args to pair
-                                         searching algorithm (default: {{}})
-    """        
-
-    # using the curses library to print relevant information to the terminal
-    # without making a mess. The wrapper function allows us to prevent
-    # the terminal layout from breaking if our application quits — it simply
-    # wraps the function in its first arg in a try...except... block which
-    # puts things back to normal if necessary
-    curses.wrapper(
-        fingerprint_builder,
-        path_to_db,
-        path_to_fingerprints,
-        peak_picking_options,
-        pair_searching_options)

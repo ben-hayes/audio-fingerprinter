@@ -1,4 +1,3 @@
-import curses
 import os
 import pickle
 import time
@@ -6,82 +5,7 @@ import time
 import numpy as np
 
 from fingerprint_builder import create_fingerprint, create_pairwise_hashes
-
-
-# store status printouts in a handy dict to save them clogging up main function
-statuses = {
-    "blank_status": {
-        "text": """
-====================================================================
-
-
-
-
-
-
-
-
-
---------------------------------------------------------------------
-
-====================================================================
-            """,
-        "y": 0,
-        "x": 0
-    },
-    "finished_identifying": {
-        "text": """
-====================================================================
-Finished identifying query: {file_name}
-Correctly Identified?       {correctly_identified}
-Correct so far:             {correct_so_far}
-Guess #1:                   {guess_1}
-Guess #2:                   {guess_2}
-Guess #3:                   {guess_3}
-Time to extract hashes:     {time_to_hashes} seconds
-Time to look up in DB:      {time_to_db} seconds
-Time elapsed so far:        {total_time} seconds
---------------------------------------------------------------------
-
-====================================================================
-            """,
-        "y": 0,
-        "x": 0
-    },
-    "analysing_file": {
-        "text": "Now identifying:            {now_analysing}",
-        "y": 12,
-        "x": 0
-    },
-    "searching_db": {
-        "text": "Searching DB for matches to {now_analysing}...",
-        "y": 12,
-        "x": 0
-    },
-    "loading_db": {
-        "text": "Loading fingerprint database {db_file} from disk...",
-        "y": 12,
-        "x": 0
-    }
-}
-
-def print_status(screen, status, status_args):
-    """
-    Helper function for printing the status to the screen.
-    
-    Arguments:
-        screen {curses.window} -- Reference to a curses window object
-        status {str} -- Key in statuses dictionary of desired status
-        status_args {dict} -- Dict of keyword arguments to format the status
-                              string.
-    """    
-    # using curses in lieu of print to allow for multiline overwrites
-    screen.addstr(
-        statuses[status]["y"],
-        statuses[status]["x"],
-        statuses[status]["text"].format(**status_args)
-    )
-    screen.refresh()
+from print_status import print_status, enable_printing
 
 
 def get_query_hashes(
@@ -97,17 +21,16 @@ def get_query_hashes(
     return query_hashes
 
 
-def audio_identification(
-        screen,
+@enable_printing
+def audioIdentification(
         path_to_queries,
         path_to_fingerprints,
         path_to_output,
         peak_picking_options={},
         pair_searching_options={}):
 
-    curses.use_default_colors()
-    print_status(screen, "blank_status", {})
-    print_status(screen, "loading_db", {"db_file": path_to_fingerprints})
+    print_status("id_blank_status", {})
+    print_status("id_loading_db", {"db_file": path_to_fingerprints})
 
     start_time = time.perf_counter()
     # open output file for writing
@@ -130,8 +53,7 @@ def audio_identification(
         n_queries += 1
 
         print_status(
-            screen,
-            "analysing_file",
+            "id_analysing_file",
             { "now_analysing": entry.name })
 
         hash_start_time = time.perf_counter()
@@ -143,8 +65,7 @@ def audio_identification(
         hash_time = time.perf_counter() - hash_start_time
 
         print_status(
-            screen,
-            "searching_db",
+            "id_searching_db",
             { "now_analysing": entry.name })
 
         db_search_start_time = time.perf_counter()
@@ -200,8 +121,7 @@ def audio_identification(
         db_search_time = time.perf_counter() - db_search_start_time
 
         print_status(
-            screen,
-            "finished_identifying",
+            "id_finished_identifying",
             {
                 "file_name": entry.name,
                 "correctly_identified": "Yes" if correct else "No",
@@ -224,19 +144,3 @@ def audio_identification(
     output_file.close()
 
     return float(n_correct) / n_queries
-
-
-def audioIdentification(
-        path_to_queries,
-        path_to_fingerprints,
-        path_to_output,
-        peak_picking_options={},
-        pair_searching_options={}):
-    
-    curses.wrapper(
-        audio_identification,
-        path_to_queries,
-        path_to_fingerprints,
-        path_to_output,
-        peak_picking_options,
-        pair_searching_options) 
