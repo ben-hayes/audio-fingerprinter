@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from fingerprint_builder import create_fingerprint, create_pairwise_hashes
+from fingerprint_builder import extract_spectral_peaks, create_pairwise_hashes
 from print_status import print_status, enable_printing
 
 
@@ -27,7 +27,7 @@ def get_query_hashes(
     """        
 
     query_fingerprint =\
-        create_fingerprint(query_file, peak_picking_options)
+        extract_spectral_peaks(query_file, peak_picking_options)
     query_hashes =\
         create_pairwise_hashes(query_fingerprint, **pair_searching_options)
 
@@ -139,7 +139,9 @@ def write_output_line(output_file, sorted_docs, query_name):
         output_line = "%s %s\n" % (
             query_name,
             ", ".join(sorted_docs[:min(3, len(sorted_docs))]))
-        output_file.write(output_line)
+    else:
+        output_line = query_name
+    output_file.write(output_line)
 
 
 @enable_printing
