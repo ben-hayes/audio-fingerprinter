@@ -55,6 +55,23 @@ Time elapsed so far:        {total_time} seconds
         "y": 12,
         "x": 0
     },
+    "fp_blank_status": {
+        "text": """
+====================================================================
+
+
+
+
+
+
+
+--------------------------------------------------------------------
+Now analysing:              
+====================================================================
+            """,
+        "y": 0,
+        "x": 0
+    },
     "fp_fingerprint_created": {
         "text": """
 ====================================================================
@@ -62,6 +79,7 @@ Fingerprint created for:    {file_name}
 Number of hashes:           {num_hashes}
 Number of new hashes:       {num_new_hashes}
 Total hashes:               {total_hashes}
+Files processed:            {files_processed}
 Time to create fingerprint: {time_to_create} seconds
 Time elapsed so far:        {total_time} seconds
 --------------------------------------------------------------------
@@ -73,12 +91,12 @@ Now analysing:
     },
     "fp_analysing_fingerprint": {
         "text": "Now analysing:              {now_analysing}",
-        "y": 9,
+        "y": 10,
         "x": 0
     },
     "fp_writing_db": {
         "text": "Writing fingerprint database {db_file} to disk...",
-        "y": 9,
+        "y": 10,
         "x": 0
     }
 }
