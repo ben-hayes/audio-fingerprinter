@@ -8,8 +8,22 @@ import numpy as np
 
 from print_status import print_status, enable_printing
 
+DEFAULT_KAPPA = 12
+DEFAULT_TAU = 13
+DEFAULT_HOP_KAPPA = 16
+DEFAULT_HOP_TAU = 5
 
-def pick_peaks(spectrogram, tau=21, kappa=59, hop_tau=11, hop_kappa=74):
+DEFAULT_TARGET_TIME_OFFSET = 69
+DEFAULT_TARGET_TIME_WIDTH = 48
+DEFAULT_TARGET_FREQ_HEIGHT = 84
+
+
+def pick_peaks(
+        spectrogram,
+        tau=DEFAULT_TAU,
+        kappa=DEFAULT_KAPPA,
+        hop_tau=DEFAULT_HOP_TAU,
+        hop_kappa=DEFAULT_HOP_KAPPA):
     """
     Given a spectrogram, finds peaks within window specified by parameters.
     Window shape will be (2 * kappa + 1, 2 * tau + 1)
@@ -58,9 +72,9 @@ def pick_peaks(spectrogram, tau=21, kappa=59, hop_tau=11, hop_kappa=74):
 
 def find_peak_pairs(
         peaks,
-        target_time_offset=3,
-        target_time_width=196,
-        target_freq_height=220):
+        target_time_offset=DEFAULT_TARGET_TIME_OFFSET,
+        target_time_width=DEFAULT_TARGET_TIME_WIDTH,
+        target_freq_height=DEFAULT_TARGET_FREQ_HEIGHT):
     """
     Given a sparse array of spectral peaks, find all peak pairs according to
     a given set of window parameters.
@@ -113,9 +127,9 @@ def find_peak_pairs(
 
 def create_pairwise_hashes(
         peaks,
-        target_time_offset=3,
-        target_time_width=196,
-        target_freq_height=220):
+        target_time_offset=DEFAULT_TARGET_TIME_OFFSET,
+        target_time_width=DEFAULT_TARGET_TIME_WIDTH,
+        target_freq_height=DEFAULT_TARGET_FREQ_HEIGHT):
     """
     Given a sparse array of spectral peaks, create a list of peak pair hashes
     and their corresponding time offsets.
@@ -147,7 +161,7 @@ def create_pairwise_hashes(
         )]
 
 
-def create_fingerprint(path_to_audio, peak_picking_options={}):
+def extract_spectral_peaks(path_to_audio, peak_picking_options={}):
     """
     Given an audio file, create a fingerprint (sparse array of spectral peaks)
     
@@ -197,8 +211,7 @@ def fingerprintBuilder(
                                          searching algorithm (default: {{}})
     """        
 
-    # setup curses library
-    curses.use_default_colors()
+    print_status("fp_blank_status", {})
     # initialise timer
     start_time = time.perf_counter()
 
@@ -209,6 +222,7 @@ def fingerprintBuilder(
     # each file contributes
     last_fingerprints_length = 0
 
+    n_processed = 0
     for entry in os.scandir(path_to_db):
         # skip over non-wav files
         if os.path.splitext(entry.name)[1] != ".wav":
@@ -222,7 +236,7 @@ def fingerprintBuilder(
         hash_start_time = time.perf_counter()
 
         # pick out spectral peaks
-        fingerprint = create_fingerprint(entry.path, peak_picking_options)
+        fingerprint = extract_spectral_peaks(entry.path, peak_picking_options)
         # compute hashes
         hashes = create_pairwise_hashes(fingerprint, **pair_searching_options)
 
@@ -240,6 +254,7 @@ def fingerprintBuilder(
 
         # find the current time to calculate performance
         time_now = time.perf_counter()
+        n_processed += 1
         print_status(
             "fp_fingerprint_created",
             {
@@ -248,6 +263,7 @@ def fingerprintBuilder(
                 "num_new_hashes":
                     len(fingerprints) - last_fingerprints_length,
                 "total_hashes": len(fingerprints),
+                "files_processed": n_processed,
                 "time_to_create": "%.3f" % (time_now - hash_start_time),
                 "total_time": "%.3f" % (time_now - start_time)
             })
