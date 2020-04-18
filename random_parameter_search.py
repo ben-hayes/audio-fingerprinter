@@ -49,7 +49,14 @@ available_parameters = {
 }
 
 
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument("output_folder", default="param_search")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
+    args = parse_args()
     performance = []
     times = []
     for n in range(N_ATTEMPTS):
@@ -86,8 +93,8 @@ if __name__ == "__main__":
         print(json.dumps(peak_picking_options, indent=4))
         print(json.dumps(pair_searching_options, indent=4))
 
-        db_name = "param_search/fingerprint_db_%d.db" % n
-        output_name = "param_search/identified_tracks_%d.txt" % n
+        db_name = "%s/fingerprint_db_%d.db" % (args.output_folder, n)
+        output_name = "%s/identified_tracks_%d.txt" % (args.output_folder, n)
 
         start_time = time.perf_counter()
         fingerprintBuilder(
@@ -109,7 +116,7 @@ if __name__ == "__main__":
         performance.append(score)
         times.append(end_time - start_time)
 
-        with open("param_search/params_%d.json" % n, "w") as f:
+        with open("%s/params_%d.json" % (args.output_folder, n), "w") as f:
             json.dump({
                     "peak_picking_options": peak_picking_options,
                     "pair_searching_options": pair_searching_options
@@ -122,7 +129,7 @@ if __name__ == "__main__":
     
     ratio = np.array(performance) / np.array(times)
     
-    with open("param_search/output.txt", "w") as f:
+    with open("%s/output.txt" % args.output_folder, "w") as f:
         for n, (sc, t) in enumerate(zip(performance, times)):
             line = "Attempt #%d — Score: %.3f, Time: %.3f" % (n, sc, t)
             f.write(line)
