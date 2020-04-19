@@ -136,9 +136,9 @@ def doc_matches_query(doc_name, query_name):
 
 def write_output_line(output_file, sorted_docs, query_name):
     if len(sorted_docs) > 0:
-        output_line = "%s %s\n" % (
+        output_line = "%s\t%s\n" % (
             query_name,
-            ", ".join(sorted_docs[:min(3, len(sorted_docs))]))
+            "\t".join(sorted_docs[:min(3, len(sorted_docs))]))
     else:
         output_line = query_name
     output_file.write(output_line)
