@@ -66,12 +66,13 @@ if __name__ == "__main__":
     args = parse_args()
 
     relevance_function = parse_id_file(args.input_file)
-    for r in range(3):
+    for r in range(1, 3 + 1):
         print("---- Rank %d ----" % r)
         print(
             "Mean Precision: %.3f" % np.mean(precision(r, relevance_function)))
         print("Mean Recall: %.3f" % np.mean(recall(r, relevance_function)))
         print(
             "Mean f-measure: %.3f" % np.mean(f_measure(r, relevance_function)))
-        print(
-            "Mean avg precision: %.3f" % mean_avg_precision(relevance_function))
+    print("----------------")
+    print(
+        "Mean avg precision: %.3f" % mean_avg_precision(relevance_function))
