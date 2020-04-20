@@ -1,3 +1,14 @@
+"""
+Ben Hayes 2020
+
+ECS7006P Music Informatics
+
+Coursework 2: Audio Identification
+
+File: audio_identification.py
+Description: Searches a fingerprint database for likely matches to a folder of
+             query audio files.
+"""
 import os
 import pickle
 import time

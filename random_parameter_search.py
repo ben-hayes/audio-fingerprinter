@@ -1,3 +1,16 @@
+"""
+Ben Hayes 2020
+
+ECS7006P Music Informatics
+
+Coursework 2: Audio Identification
+
+File: random_parameter_search.py
+Description: A simple script for performing a random parameter search across
+             the parameter space of the fingerprinting and identification
+             algorithms.
+             
+"""
 from argparse import ArgumentParser
 import json
 import time

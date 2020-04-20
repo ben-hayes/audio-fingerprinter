@@ -1,3 +1,15 @@
+"""
+Ben Hayes 2020
+
+ECS7006P Music Informatics
+
+Coursework 2: Audio Identification
+
+File: evaluation.py
+Description: A set of simple functions for calculation evaluation metrics on
+             the output of an audio identification system. Can also be called
+             directly as a script to print scores at a number of ranks.
+"""
 from argparse import ArgumentParser
 
 import numpy as np

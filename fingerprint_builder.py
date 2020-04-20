@@ -1,3 +1,14 @@
+"""
+Ben Hayes 2020
+
+ECS7006P Music Informatics
+
+Coursework 2: Audio Identification
+
+File: fingerprint_builder.py
+Description: Builds a database on disk of spectral peak and pairwise hash based
+             fingerprints from a folder of audio files.
+"""
 import curses
 import os
 import pickle
